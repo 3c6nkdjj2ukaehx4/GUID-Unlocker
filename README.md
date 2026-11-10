@@ -6,8 +6,9 @@ Patches all GUID comparisons used by the MX Bikes `.pkz` loader so archives
 ## Files
 
 ```
-bin\x64\Release\Loader.exe     injector
-bin\x64\Release\version.dll    bypass DLL
+bin\x64\Release\Loader\Loader.exe       injector
+bin\x64\Release\Loader\version.dll      bypass DLL
+bin\x64\Release\PkzUnpacker\PkzUnpacker.exe  .pkz decryptor/extractor
 ```
 
 ## Usage
@@ -84,6 +85,87 @@ track list: reload requested
 track list: reloading from disk (count before = N)...
 track list: reloaded (count after = M)
 ```
+
+## PkzUnpacker
+
+`PkzUnpacker.exe` decrypts and extracts `.pkz` archives that carry a GUID
+lock. The lock is reported but never enforced, so a locked archive can be
+opened on any machine.
+
+### Interactive menu
+
+Run the executable with no arguments (or double-click it):
+
+```powershell
+.\PkzUnpacker.exe
+```
+
+It finds the MX Bikes mods folder automatically and lists only `.pkz` files
+that carry a non-zero GUID lock, across every category (`tracks`, `bikes`,
+`rider`/clothing, `tyres`, `misc`, ...):
+
+```
+Found 7 GUID-locked .pkz files
+  tracks       7
+```
+
+Menu options:
+
+```
+1) Decrypt ONE GUID-locked archive -> keep in game mods folder
+2) Decrypt ONE GUID-locked archive -> output folder next to this app
+3) Decrypt ALL GUID-locked archives -> keep in game mods folder
+4) Decrypt ALL GUID-locked archives -> output folder next to this app
+5) Show found archives
+0) Exit
+```
+
+- **Keep in game mods folder** extracts the archive next to the original
+  `.pkz`, so the game sees the unpacked mod folder.
+- **Output folder next to this app** writes to `output\<category>\` beside
+  `PkzUnpacker.exe`.
+- Options 1/2 let you filter the archive list by name before picking one.
+- Existing files are skipped unless you answer `y` to the overwrite prompt.
+- After a successful decrypt, the 16-byte GUID is cleared from the source
+  `.pkz` trailer, so the archive is permanently unlocked.
+- Plain ZIPs and encrypted archives whose GUID is all zero are not shown in
+  the menu; they can still be handled with the command line if needed.
+
+The mods folder is detected from the known Documents folder, `%OneDrive%`,
+and the Steam install. Set the `MXBIKES_MODS` environment variable to a mods
+folder to override the automatic detection.
+
+### Command line
+
+```powershell
+# extract next to the archive (creates .\<archive-name>\)
+PkzUnpacker.exe "C:\path\to\track.pkz"
+
+# extract to a specific folder
+PkzUnpacker.exe "C:\path\to\track.pkz" -o D:\extracted
+
+# list contents without extracting
+PkzUnpacker.exe "C:\path\to\track.pkz" --list
+
+# process every .pkz in a folder (add -r for subfolders)
+PkzUnpacker.exe "C:\path\to\mods\tracks" -o D:\tracks -r
+
+# also clear the GUID lock in the source archive after extracting it
+PkzUnpacker.exe "C:\path\to\track.pkz" -o D:\extracted --remove-guid
+```
+
+GUID-locked archives are standard ZIPs whose central directory and local
+headers/file names are wrapped in RC4, with the key and 16-byte GUID stored in
+a trailer at the end of the file. File data is ordinary ZIP `stored` or
+`deflate`. Both trailer layouts are supported:
+
+| Magic | Trailer | Layout |
+| --- | --- | --- |
+| `LOCK` | 62 bytes | current mod-tool output |
+| `LCK3` | 56 bytes | legacy |
+
+Plain, unencrypted `.pkz` files (the stock game archives) are also accepted.
+Every extracted file is CRC-checked and removed again if the check fails.
 
 ## Build
 
